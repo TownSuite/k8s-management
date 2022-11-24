@@ -1,0 +1,64 @@
+#!/bin/bash
+set -e # exit on first error
+set -u # exit on using unset variable
+
+echo 'bulk-deployment-modification is a script to bulk apply'
+echo 'rolling update strategy, resource requests, and startup/liveness/readiness probes.'
+echo 'Requirements:'
+echo 'kubectl'
+echo '    Download from https://kubernetes.io/docs/tasks/tools/'
+echo 'cut'
+echo 'grep'
+echo 'xargs'
+
+# source will execute the env file.  Be sure you trust the file.
+source ./bulk-deployment-modification.env
+
+
+function upgrade_deployments(){
+    NAMESPACE=$1
+    DEPLOYMENT_NAME=$2
+    PORT=$3
+    CPU=$4
+    RAM=$5
+    STARTUPPROBE=$6
+    LIVEPROBE=$7
+    READYPROBE=$8
+    SCHEME=$9
+    
+    echo "patching $NAMESPACE::$DEPLOYMENT_NAME::$PORT::$CPU::$RAM::$STARTUPPROBE::$LIVEPROBE::$READYPROBE::$SCHEME"
+
+    $k -n $NAMESPACE patch deployment $DEPLOYMENT_NAME -p "{\"spec\":{\"strategy\":{\"rollingUpdate\":{\"maxSurge\": 0, \"maxUnavailable\": \"25%\"}, \"type\": \"RollingUpdate\"}}}"
+    
+    if (( $PORT > 0 )); then
+        $k -n $NAMESPACE patch deployment $DEPLOYMENT_NAME -p "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"$DEPLOYMENT_NAME\",\"startupProbe\":{\"httpGet\": {\"path\":\"$STARTUPPROBE\", \"port\": $PORT, \"scheme\": \"$SCHEME\"}, \"failureThreshold\": 30, \"periodSeconds\": 10}}]}}}}"
+        $k -n $NAMESPACE patch deployment $DEPLOYMENT_NAME -p "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"$DEPLOYMENT_NAME\",\"livenessProbe\":{\"httpGet\": {\"path\":\"$LIVEPROBE\", \"port\": $PORT, \"scheme\": \"$SCHEME\"}, \"initialDelaySeconds\": 30, \"failureThreshold\": 3, \"timeoutSeconds\": 5}}]}}}}"
+        $k -n $NAMESPACE patch deployment $DEPLOYMENT_NAME -p "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"$DEPLOYMENT_NAME\",\"readinessProbe\":{\"httpGet\": {\"path\":\"$READYPROBE\", \"port\": $PORT, \"scheme\": \"$SCHEME\"}, \"initialDelaySeconds\": 30, \"failureThreshold\": 30, \"timeoutSeconds\": 15}}]}}}}"
+    fi
+
+    $k -n $NAMESPACE patch deployment $DEPLOYMENT_NAME -p "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"$DEPLOYMENT_NAME\",\"resources\":{\"requests\": {\"memory\":\"$RAM\", \"cpu\": \"$CPU\"}}}]}}}}"
+    
+}
+
+for item in ${deployments_wildcards[*]}
+do
+    # specfic paths for each site
+    namespacey=`echo $item | cut -d "," -f 1`
+    deploy_name_wildcard=`echo $item | cut -d "," -f 2`
+    port=`echo $item | cut -d "," -f 3`
+    cpu=`echo $item | cut -d "," -f 4`
+    ram=`echo $item | cut -d "," -f 5`
+    startupProbe=`echo $item | cut -d "," -f 6`
+    liveProbe=`echo $item | cut -d "," -f 7`
+    readyProbe=`echo $item | cut -d "," -f 8`
+    scheme=`echo $item | cut -d "," -f 9`
+
+    deployment_names=`$k -n $namespacey get deployments -o name | grep "$deploy_name_wildcard" | cut -d "/" -f 2 | xargs -n1 echo`
+
+    for dep_name in ${deployment_names}
+    do
+        upgrade_deployments "$namespacey" "$dep_name" "$port" "$cpu" "$ram" "$startupProbe" "$liveProbe" "$readyProbe" "$scheme"
+    done
+done
+
+

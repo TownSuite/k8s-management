@@ -1,0 +1,73 @@
+#!/bin/bash
+set -e # exit on first error
+set -u # exit on using unset variable
+
+echo 'bulk-manifest-export is a script to bulk export specific k8s json manifests.'
+echo 'The script exports, zips, and uploads to a sftp server.'
+echo 'Requirements:'
+echo 'kubectl'
+echo '    Download from https://kubernetes.io/docs/tasks/tools/'
+echo 'jq'
+echo '    apt install jq'
+echo 'fileupload'
+echo '    Download from https://github.com/majorsilence/Fileupload/releases'
+echo '    Link to /usr/bin/fileupload'
+echo 'zip'
+echo '    apt install zip'
+echo 'cut'
+echo 'grep'
+echo 'rm'
+echo 'xargs'
+
+# source will execute the env file.  Be sure you trust the file.
+source ./bulk-manifest-export.env
+
+
+# Ensure clean output folder
+/usr/bin/rm -rf $OUTPUT_FOLDER
+
+
+
+for the_wild_namespace in ${namespace_wildcard[*]}
+    do
+
+    ts_namespaces=`$K get namespaces -o name | grep "$the_wild_namespace"  | cut -d "/" -f 2 | xargs -n1 echo`
+
+    for namespacey in ${ts_namespaces[*]}
+    do
+
+        mkdir -p $OUTPUT_FOLDER/$namespacey
+        echo "exporting $K -n $namespacey get namespace $namespacey to $OUTPUT_FOLDER/$namespacey/$namespacey.json"
+
+        $K -n $namespacey get namespace $namespacey  -o=json | jq 'del(.metadata.resourceVersion,.metadata.uid,.metadata.selfLink,.metadata.creationTimestamp,.metadata.annotations,.metadata.generation,.metadata.ownerReferences,.status)'  > "$OUTPUT_FOLDER/$namespacey/$namespacey.json"
+
+        $K -n $namespacey get ingress -o json | jq 'del(.metadata.resourceVersion,.metadata.uid,.metadata.selfLink,.metadata.creationTimestamp,.metadata.annotations,.metadata.generation,.metadata.ownerReferences,.status)' > "$OUTPUT_FOLDER/$namespacey/ingress.json"
+
+        for type in ${type_wildcards[*]}
+        do
+            # Clean manifest export
+            # https://fabianlee.org/2022/06/06/kubernetes-export-a-clean-yaml-manifest-that-can-be-re-imported/
+    
+            foundinstances=`$K -n $namespacey get $type -o name | cut -d "/" -f 2 | xargs -n1 echo`
+            for name in ${foundinstances[*]}
+            do
+                workingdir="$OUTPUT_FOLDER/$namespacey/$type"
+                mkdir -p $workingdir
+
+                echo "exporting $K -n $namespacey get $type $name to $workingdir/$name.json"
+                $K -n $namespacey get $type $name  -o=json | jq 'del(.metadata.resourceVersion,.metadata.uid,.metadata.selfLink,.metadata.creationTimestamp,.metadata.annotations,.metadata.generation,.metadata.ownerReferences,.status)'  > "$workingdir/$name.json"
+            done
+        done
+    done
+done
+
+/usr/bin/rm -rf $OUTPUT_ZIP
+# FIXME: zip encryption is very weak.  Replace with something better.
+/usr/bin/zip -r --password "$ZIPPASSWORD" "$OUTPUT_ZIP" $OUTPUT_FOLDER
+/usr/bin/rm -rf $OUTPUT_FOLDER
+
+#sshpass -p "$SERVERPASSWORD" scp "$OUTPUT_ZIP" $USERNAME@$SERVER:$SERVERPATH/$TODAY-$HOSTNAME-manifest-export.zip -P $PORT
+
+/usr/bin/fileupload --provider "sftp" --sftpusername "$USERNAME" --sftppassword "$SERVERPASSWORD" --sftphost "$SERVER" --sftpport "$PORT" --sourcepath "$OUTPUT_ZIP" --destpath "$SERVERPATH/$TODAY-$HOSTNAME-manifest-export.zip"
+
+
