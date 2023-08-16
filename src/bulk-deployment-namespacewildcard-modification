@@ -2,8 +2,17 @@
 set -e # exit on first error
 set -u # exit on using unset variable
 
-echo 'bulk-deployment-namespacewildcard-modification is a script to bulk update'
-echo 'deployments (wildcard) inside of namespaces(wildcard).'
+echo 'bulk-deployment-namespacewildcard-modification is a script to bulk patch'
+echo 'deployments (wildcard) inside of namespaces (wildcard).'
+echo ''
+echo 'Will set:'
+echo '  rollingUpdate strategy maxUnavailable=25%'
+echo '  startupProbe'
+echo '  livenessProbe'
+echo '  readynessProbe'
+echo '  image name/version'
+echo '  memory and cpu resource request'
+echo '  securityContext allowPrivilegeEscalation=false'
 echo ''
 echo 'config env files must be placed in "/etc/townsuite/k8s/env-configs/"'
 echo 'sudo mkdir -p /etc/townsuite/k8s/env-configs/'
@@ -31,18 +40,30 @@ function upgrade_deployments(){
     
     echo "patching $NAMESPACE::$DEPLOYMENT_NAME::$IMAGE_NAME::$PORT::$CPU::$RAM::$STARTUPPROBE::$LIVEPROBE::$READYPROBE::$SCHEME"
 
+    # set rollingUpdate strategy
     $k -n $NAMESPACE patch deployment $DEPLOYMENT_NAME -p "{\"spec\":{\"strategy\":{\"rollingUpdate\":{\"maxSurge\": 0, \"maxUnavailable\": \"25%\"}, \"type\": \"RollingUpdate\"}}}"
     
     if (( $PORT > 0 )); then
+        # set startupProbe
         $k -n $NAMESPACE patch deployment $DEPLOYMENT_NAME -p "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"$DEPLOYMENT_NAME\",\"startupProbe\":{\"httpGet\": {\"path\":\"$STARTUPPROBE\", \"port\": $PORT, \"scheme\": \"$SCHEME\"}, \"failureThreshold\": 30, \"periodSeconds\": 10}}]}}}}"
+
+        # set livenessProbe
         $k -n $NAMESPACE patch deployment $DEPLOYMENT_NAME -p "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"$DEPLOYMENT_NAME\",\"livenessProbe\":{\"httpGet\": {\"path\":\"$LIVEPROBE\", \"port\": $PORT, \"scheme\": \"$SCHEME\"}, \"initialDelaySeconds\": 30, \"failureThreshold\": 3, \"timeoutSeconds\": 5}}]}}}}"
+
+        # set readinessProbe
         $k -n $NAMESPACE patch deployment $DEPLOYMENT_NAME -p "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"$DEPLOYMENT_NAME\",\"readinessProbe\":{\"httpGet\": {\"path\":\"$READYPROBE\", \"port\": $PORT, \"scheme\": \"$SCHEME\"}, \"initialDelaySeconds\": 30, \"failureThreshold\": 30, \"timeoutSeconds\": 15}}]}}}}"
         
     fi
 
+    # set image name
     $k -n $NAMESPACE patch deployment $DEPLOYMENT_NAME -p "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"$DEPLOYMENT_NAME\",\"image\":\"$IMAGE_NAME\"}]}}}}"
+
+    # set memory and cpu request
     $k -n $NAMESPACE patch deployment $DEPLOYMENT_NAME -p "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"$DEPLOYMENT_NAME\",\"resources\":{\"requests\": {\"memory\":\"$RAM\", \"cpu\": \"$CPU\"}}}]}}}}"
-    
+
+    # set allowPrivilegeEscalation to false
+    $k -n $NAMESPACE get deployment $DEPLOYMENT_NAME -o json | jq '.spec.template.spec.containers[].securityContext.allowPrivilegeEscalation = false' | $k -n $NAMESPACE patch deployment $DEPLOYMENT_NAME -p "$(cat -)"
+
 }
 
 
