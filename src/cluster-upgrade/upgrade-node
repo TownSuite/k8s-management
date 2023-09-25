@@ -1,0 +1,31 @@
+#!/bin/bash
+set -e # exit on first error
+set -u # exit on using unset variable
+
+echo 'upgrade-node is a script to simplify self hosted microk8s cluster upgrades'
+echo 'Requirements:'
+echo 'kubectl'
+echo '    Download from https://kubernetes.io/docs/tasks/tools/'
+
+# source will execute the env file.  Be sure you trust the file.
+source ./upgrade-node.env
+
+
+NODE=$1
+
+for NODE in ${NODE_LIST[@]}; do
+  echo $NODE
+
+    $k drain $NODE --ignore-daemonsets
+    $k get po -A --all-namespaces -o wide
+
+
+    # Connect to NODE and refresh microk8s
+    REFRESH_OUTPUT=`ssh -t $USER@$NODE snap refresh microk8s --channel=$MICROK8S_VERSION/stable && sudo microk8s status --wait-ready`
+
+    echo "output:"
+    echo $REFRESH_OUTPUT
+
+    $k uncordon $NODE
+done
+
