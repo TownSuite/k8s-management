@@ -73,6 +73,11 @@ for source_env in ${source_envs[*]}
 do
     source $source_env
 
+    if [ $ALREADY_UPDATED -eq 1 ]; then
+        echo "already updated, moving to next config"
+        continue
+    fi
+
     found_namespaces=`$k get namespaces -o name | grep "$namespace_wildcard"  | cut -d "/" -f 2 | xargs -n1 echo`
 
     for namespacey in ${found_namespaces[*]}

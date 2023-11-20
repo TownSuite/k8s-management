@@ -58,6 +58,11 @@ function upgrade_deployments(){
     
 }
 
+if [ $ALREADY_UPDATED -eq 1 ]; then
+        echo "already updated, exiting"
+        exit 0
+fi
+
 for item in ${deployments_wildcards[*]}
 do
     # specfic paths for each site
