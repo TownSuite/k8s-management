@@ -1,0 +1,97 @@
+#!/bin/bash
+set -e # exit on first error
+set -u # exit on using unset variable
+
+echo 'bulk-healthchecks-updatestrategy-resource-requests is a script to bulk patch'
+echo 'deployments (wildcard) inside of namespaces (wildcard).'   It will reuse the env settings
+echo 'file provided by the bulk-deployment scripts'
+echo ''
+echo 'Will set:'
+echo '  rollingUpdate strategy maxUnavailable=25%'
+echo '  startupProbe'
+echo '  livenessProbe'
+echo '  readynessProbe'
+echo '  image name/version'
+echo '  memory and cpu resource request'
+echo '  securityContext allowPrivilegeEscalation=false'
+echo ''
+echo 'config env files must be placed in "/etc/townsuite/k8s/env-configs/"'
+echo 'sudo mkdir -p /etc/townsuite/k8s/env-configs/'
+echo ''
+echo 'Requirements:'
+echo 'kubectl'
+echo '    Download from https://kubernetes.io/docs/tasks/tools/'
+echo 'cut'
+echo 'grep'
+echo 'xargs'
+
+# source will execute the env file.  Be sure you trust the file.
+
+function patch_deployments(){
+    NAMESPACE=$1
+    DEPLOYMENT_NAME=$2
+    PORT=$3
+    CPU=$4
+    RAM=$5
+    STARTUPPROBE=$6
+    LIVEPROBE=$7
+    READYPROBE=$8
+    SCHEME=${9}
+    
+    echo "patching $NAMESPACE::$DEPLOYMENT_NAME::$PORT::$CPU::$RAM::$STARTUPPROBE::$LIVEPROBE::$READYPROBE::$SCHEME"
+
+    # set rollingUpdate strategy
+    $k -n $NAMESPACE patch deployment $DEPLOYMENT_NAME -p "{\"spec\":{\"strategy\":{\"rollingUpdate\":{\"maxSurge\": 0, \"maxUnavailable\": \"25%\"}, \"type\": \"RollingUpdate\"}}}"
+    
+    if (( $PORT > 0 )); then
+        # set startupProbe
+        $k -n $NAMESPACE patch deployment $DEPLOYMENT_NAME -p "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"$DEPLOYMENT_NAME\",\"startupProbe\":{\"httpGet\": {\"path\":\"$STARTUPPROBE\", \"port\": $PORT, \"scheme\": \"$SCHEME\"}, \"failureThreshold\": 30, \"periodSeconds\": 10}}]}}}}"
+
+        # set livenessProbe
+        $k -n $NAMESPACE patch deployment $DEPLOYMENT_NAME -p "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"$DEPLOYMENT_NAME\",\"livenessProbe\":{\"httpGet\": {\"path\":\"$LIVEPROBE\", \"port\": $PORT, \"scheme\": \"$SCHEME\"}, \"initialDelaySeconds\": 30, \"failureThreshold\": 3, \"timeoutSeconds\": 5}}]}}}}"
+
+        # set readinessProbe
+        $k -n $NAMESPACE patch deployment $DEPLOYMENT_NAME -p "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"$DEPLOYMENT_NAME\",\"readinessProbe\":{\"httpGet\": {\"path\":\"$READYPROBE\", \"port\": $PORT, \"scheme\": \"$SCHEME\"}, \"initialDelaySeconds\": 30, \"failureThreshold\": 30, \"timeoutSeconds\": 15}}]}}}}"
+        
+    fi
+
+    # set memory and cpu request
+    $k -n $NAMESPACE patch deployment $DEPLOYMENT_NAME -p "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"$DEPLOYMENT_NAME\",\"resources\":{\"requests\": {\"memory\":\"$RAM\", \"cpu\": \"$CPU\"}}}]}}}}"
+
+    # set allowPrivilegeEscalation to false
+    #$k -n $NAMESPACE get deployment $DEPLOYMENT_NAME -o json | jq '.spec.template.spec.containers[].securityContext.allowPrivilegeEscalation = false' | $k -n $NAMESPACE patch deployment $DEPLOYMENT_NAME -p "$(cat -)"
+
+}
+
+
+source_envs=`ls -d /etc/townsuite/k8s/env-configs/bulk-deploy*namespacewildcard*.env | xargs -n1 echo`
+
+for source_env in ${source_envs[*]}
+do
+    source $source_env
+
+    found_namespaces=`$k get namespaces -o name | grep "$namespace_wildcard"  | cut -d "/" -f 2 | xargs -n1 echo`
+
+    for namespacey in ${found_namespaces[*]}
+    do
+        for item in ${deployments_wildcards[*]}
+        do
+            # specfic paths for each site
+            deploy_name_wildcard=`echo $item | cut -d "," -f 1`
+            port=`echo $item | cut -d "," -f 3`
+            cpu=`echo $item | cut -d "," -f 4`
+            ram=`echo $item | cut -d "," -f 5`
+            startupProbe=`echo $item | cut -d "," -f 6`
+            liveProbe=`echo $item | cut -d "," -f 7`
+            readyProbe=`echo $item | cut -d "," -f 8`
+            scheme=`echo $item | cut -d "," -f 9`
+
+            deployment_names=`$k -n $namespacey get deployments -o name | grep "$deploy_name_wildcard" | cut -d "/" -f 2 | xargs -n1 echo`
+
+            for dep_name in ${deployment_names}
+            do
+                patch_deployments "$namespacey" "$dep_name" "$port" "$cpu" "$ram" "$startupProbe" "$liveProbe" "$readyProbe" "$scheme"
+            done
+        done
+    done
+done
