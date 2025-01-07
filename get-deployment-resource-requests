@@ -1,0 +1,26 @@
+#!/bin/bash
+
+# Get all deployments in all namespaces
+deployments=$(kubectl get deployments --all-namespaces -o json)
+
+# Check each deployment for resource requests
+echo "Checking deployments for resource requests (memory and cpu)..."
+echo
+# Print CSV header
+echo "Namespace,Deployment,Container,Memory Request,CPU Request"
+for deployment in $(echo "${deployments}" | jq -r '.items[] | @base64'); do
+    _jq() {
+        echo ${deployment} | base64 --decode | jq -r ${1}
+    }
+
+    namespace=$(_jq '.metadata.namespace')
+    name=$(_jq '.metadata.name')
+    containers=$(_jq '.spec.template.spec.containers')
+
+    for container in $(echo "${containers}" | jq -r '.[] | @base64'); do
+        container_name=$(echo ${container} | base64 --decode | jq -r '.name')
+        memory_request=$(echo ${container} | base64 --decode | jq -r '.resources.requests.memory // "none"')
+        cpu_request=$(echo ${container} | base64 --decode | jq -r '.resources.requests.cpu // "none"')
+        echo "${namespace},${name},${container_name},${memory_request},${cpu_request}"
+    done
+done
