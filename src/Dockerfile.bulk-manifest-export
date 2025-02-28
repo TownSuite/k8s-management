@@ -1,0 +1,32 @@
+# Use the official Ubuntu 24.04 as a base image
+FROM ubuntu:24.04
+
+# Set the working directory
+WORKDIR /app
+
+# Copy the bulk-manifest-export script into the container
+COPY bulk-manifest-export /app/bulk-manifest-export
+
+# Ensure the script has execute permissions
+RUN chmod +x /app/bulk-manifest-export
+
+# Install any necessary dependencies (example: curl)
+RUN apt-get update && apt-get install -y \
+    curl \
+    apt-transport-https \
+    dotnet-runtime-8.0 \
+    jq \
+    && rm -rf /var/lib/apt/lists/* \
+    && curl -L https://github.com/majorsilence/Fileupload/releases/download/v1.0.7/linux-x64.zip -o /tmp/fileupload.zip \
+    && apt install -y unzip \
+    && unzip /tmp/fileupload.zip -d /opt/townsuite \
+    && rm /tmp/fileupload.zip \
+    && echo '#!/bin/bash\nexec dotnet /opt/townsuite/linux-x64/FileUpload.dll "$@"' > /usr/local/bin/fileupload.sh \
+    && chmod +x /usr/local/bin/fileupload.sh \
+    && ln -s /usr/local/bin/fileupload.sh /usr/bin/fileupload \
+    && curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" \
+    && chmod +x kubectl \
+    && mv kubectl /usr/local/bin/
+
+
+ENTRYPOINT ["/bin/bash", "-c"]

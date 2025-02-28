@@ -1,0 +1,17 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: daily-manifest-export-script
+spec:
+  schedule: "0 0 * * *" # This means the job will run once a day at midnight
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: bash-script
+            image: your-docker-image:tag # Replace with your Docker image and tag
+            imagePullPolicy: IfNotPresent
+          imagePullSecrets:
+            - name: your-secret-name # Replace with your image pull secret name
+          restartPolicy: OnFailure
