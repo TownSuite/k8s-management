@@ -1,0 +1,3 @@
+bulk-deployments/
+cluster-upgrade/
+*.yaml
