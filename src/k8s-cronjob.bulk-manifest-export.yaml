@@ -6,7 +6,8 @@ spec:
   schedule: "0 0 * * *" # This means the job will run once a day at midnight
   jobTemplate:
     spec:
-      template:
+      ttlSecondsAfterFinished: 86400
+      template:      
         spec:
           containers:
           - name: bash-script
