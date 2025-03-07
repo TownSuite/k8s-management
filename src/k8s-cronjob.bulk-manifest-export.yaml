@@ -12,6 +12,14 @@ spec:
           - name: bash-script
             image: your-docker-image:tag # Replace with your Docker image and tag
             imagePullPolicy: IfNotPresent
+            volumeMounts:
+            - name: secret-volume
+              mountPath: /app/configs # Replace with the path where you want to mount the secret
+            command: ["/bin/bash", "-c", "cp /app/configs/config-source /app/bulk-manifest-export.env && /app/bulk-manifest-export"] # Replace with your script
           imagePullSecrets:
             - name: your-secret-name # Replace with your image pull secret name
           restartPolicy: OnFailure
+          volumes:
+          - name: secret-volume
+            secret:
+              secretName: manifest-secret-name # Replace with your secret name
