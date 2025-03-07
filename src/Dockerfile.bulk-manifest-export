@@ -17,6 +17,7 @@ RUN apt update && apt install -y \
     dotnet-runtime-8.0 \
     jq \
     unzip \
+    zip \
     && rm -rf /var/lib/apt/lists/* \
     && curl -L https://github.com/majorsilence/Fileupload/releases/download/v1.0.7/linux-x64.zip -o /tmp/fileupload.zip \
     && mkdir -p /opt/townsuite/fileupload \
