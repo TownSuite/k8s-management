@@ -24,31 +24,20 @@ function rollout_restart_deployments(){
     NAMESPACE=$1
     DEPLOYMENT_NAME=$2
   
-    $k -n $NAMESPACE rollout restart deployment $DEPLOYMENT_NAME
+    echo "namepace: $NAMESPACE, deployment name $DEPLOYMENT_NAME"
+    kubectl -n $NAMESPACE rollout restart deployment $DEPLOYMENT_NAME
 }
 
+# Get all namespaces except kube-system
+found_namespaces=$(kubectl get namespaces -o name | cut -d "/" -f 2 | grep -v "^kube-system$" | xargs -n1 echo)
 
-source_envs=`ls -d /etc/townsuite/k8s/env-configs/bulk-deploy*namespacewildcard*.env | xargs -n1 echo`
-
-for source_env in ${source_envs[*]}
+for namespacey in ${found_namespaces[*]}
 do
-    source $source_env
+        deployment_names=$(kubectl -n $namespacey get deployments -o name  | cut -d "/" -f 2 | xargs -n1 echo)
 
-    found_namespaces=`$k get namespaces -o name | grep "$namespace_wildcard"  | cut -d "/" -f 2 | xargs -n1 echo`
-
-    for namespacey in ${found_namespaces[*]}
-    do
-        for item in ${deployments_wildcards[*]}
-        do
-            # specfic paths for each site
-            deploy_name_wildcard=`echo $item | cut -d "," -f 1`
-
-            deployment_names=`$k -n $namespacey get deployments -o name | grep "$deploy_name_wildcard" | cut -d "/" -f 2 | xargs -n1 echo`
-
-            for dep_name in ${deployment_names}
-            do
-                rollout_restart_deployments "$namespacey" "$dep_name"
-            done
+        for dep_name in ${deployment_names}
+        do           
+            rollout_restart_deployments "$namespacey" "$dep_name"
         done
-    done
+
 done
