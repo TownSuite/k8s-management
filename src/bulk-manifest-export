@@ -41,7 +41,7 @@ for the_wild_namespace in ${namespace_wildcard[*]}
 
         $K -n $namespacey get namespace $namespacey  -o=json | jq 'del(.metadata.resourceVersion,.metadata.uid,.metadata.selfLink,.metadata.creationTimestamp,.metadata.annotations,.metadata.generation,.metadata.ownerReferences,.status)'  > "$OUTPUT_FOLDER/$namespacey/$namespacey.json"
 
-        $K -n $namespacey get ingress -o json | jq 'del(.metadata.resourceVersion,.metadata.uid,.metadata.selfLink,.metadata.creationTimestamp,.metadata.annotations,.metadata.generation,.metadata.ownerReferences,.status)' > "$OUTPUT_FOLDER/$namespacey/ingress.json"
+        $K -n $namespacey get ingress -o json | jq 'del(.metadata.resourceVersion,.metadata.uid,.metadata.selfLink,.metadata.creationTimestamp,.metadata.generation,.metadata.ownerReferences,.status)' > "$OUTPUT_FOLDER/$namespacey/ingress.json"
 
         for type in ${type_wildcards[*]}
         do
@@ -58,7 +58,7 @@ for the_wild_namespace in ${namespace_wildcard[*]}
                 if [ "$type" == "service" ]; then
                     $K -n $namespacey get $type $name -o=json | jq 'del(.metadata.resourceVersion,.metadata.uid,.metadata.selfLink,.metadata.creationTimestamp,.metadata.annotations,.metadata.generation,.metadata.ownerReferences,.status,.spec.clusterIP,.spec.clusterIPs)' > "$workingdir/$name.json"
                 else
-                    $K -n $namespacey get $type $name -o=json | jq 'del(.metadata.resourceVersion,.metadata.uid,.metadata.selfLink,.metadata.creationTimestamp,.metadata.annotations,.metadata.generation,.metadata.ownerReferences,.status)' > "$workingdir/$name.json"
+                    $K -n $namespacey get $type $name -o=json | jq 'del(.metadata.resourceVersion,.metadata.uid,.metadata.selfLink,.metadata.creationTimestamp,.metadata.generation,.metadata.ownerReferences,.status)' > "$workingdir/$name.json"
                 fi
             done
         done
