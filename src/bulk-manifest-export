@@ -55,7 +55,11 @@ for the_wild_namespace in ${namespace_wildcard[*]}
                 mkdir -p $workingdir
 
                 echo "exporting $K -n $namespacey get $type $name to $workingdir/$name.json"
-                $K -n $namespacey get $type $name  -o=json | jq 'del(.metadata.resourceVersion,.metadata.uid,.metadata.selfLink,.metadata.creationTimestamp,.metadata.annotations,.metadata.generation,.metadata.ownerReferences,.status)'  > "$workingdir/$name.json"
+                if [ "$type" == "service" ]; then
+                    $K -n $namespacey get $type $name -o=json | jq 'del(.metadata.resourceVersion,.metadata.uid,.metadata.selfLink,.metadata.creationTimestamp,.metadata.annotations,.metadata.generation,.metadata.ownerReferences,.status,.spec.clusterIP,.spec.clusterIPs)' > "$workingdir/$name.json"
+                else
+                    $K -n $namespacey get $type $name -o=json | jq 'del(.metadata.resourceVersion,.metadata.uid,.metadata.selfLink,.metadata.creationTimestamp,.metadata.annotations,.metadata.generation,.metadata.ownerReferences,.status)' > "$workingdir/$name.json"
+                fi
             done
         done
     done
