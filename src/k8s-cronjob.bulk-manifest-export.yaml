@@ -24,3 +24,31 @@ spec:
           - name: secret-volume
             secret:
               secretName: manifest-secret-name # Replace with your secret name
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: multi-resource-access
+rules:
+- apiGroups: [""]
+  resources: ["namespaces", "secrets", "configmaps", "services"]
+  verbs: ["list", "get"]
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["list", "get"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses"]
+  verbs: ["list", "get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: multi-resource-access-binding
+subjects:
+- kind: ServiceAccount
+  name: default
+  namespace: PLACEHOLDER_NAMESPACE # Replace with the namespace where the CronJob is running
+roleRef:
+  kind: ClusterRole
+  name: multi-resource-access
+  apiGroup: rbac.authorization.k8s.io
