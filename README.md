@@ -1,2 +1,2 @@
 # k8s-management
-scripts to bulk edit k8 clusters
+scripts to bulk edit k8s clusters
